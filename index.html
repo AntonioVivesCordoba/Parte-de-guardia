@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lector de horarios de profesores</title>
+
+<!-- Librerías cargadas desde CDN. El programa sigue siendo un único archivo HTML. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+:root{
+  --bg:#f4f7fb;
+  --card:#ffffff;
+  --text:#172033;
+  --muted:#667085;
+  --primary:#2156d8;
+  --primary-dark:#173a94;
+  --line:#d8e0ec;
+  --soft:#eef3ff;
+  --ok:#147a4a;
+  --warn:#b54708;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,Segoe UI,Arial,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+header{
+  background:linear-gradient(135deg,var(--primary-dark),var(--primary));
+  color:#fff;
+  padding:24px 28px;
+}
+header h1{margin:0 0 6px;font-size:25px}
+header p{margin:0;opacity:.92}
+main{max-width:1200px;margin:24px auto;padding:0 18px 50px}
+.card{
+  background:var(--card);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:18px;
+  margin-bottom:16px;
+  box-shadow:0 4px 14px rgba(24,42,78,.05);
+}
+h2{margin-top:0;font-size:20px}
+button{
+  border:0;
+  border-radius:9px;
+  padding:10px 15px;
+  font-weight:700;
+  cursor:pointer;
+  background:var(--primary);
+  color:#fff;
+}
+button.secondary{
+  background:#eef2f7;
+  color:#26354d;
+  border:1px solid #cfd8e6;
+}
+button:disabled{opacity:.45;cursor:not-allowed}
+input{
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  padding:10px 11px;
+  background:white;
+  color:var(--text);
+}
+input[type=file]{max-width:470px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.notice{
+  margin-top:12px;
+  padding:12px 14px;
+  border-radius:10px;
+  background:#eef5ff;
+  border:1px solid #cfe0ff;
+  color:#24426f;
+}
+.notice.warn{
+  background:#fff8e7;
+  border-color:#f4d494;
+  color:#704300;
+}
+.stats{
+  display:flex;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-top:14px;
+}
+.stat{
+  min-width:170px;
+  background:#f8fafc;
+  border:1px solid var(--line);
+  border-radius:11px;
+  padding:13px 16px;
+}
+.stat b{display:block;font-size:25px;margin-top:3px}
+.small{font-size:12px;color:var(--muted)}
+.hidden{display:none!important}
+
+#teacherSearch{width:min(420px,100%);margin-bottom:12px}
+.teacher-list{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(255px,1fr));
+  gap:10px;
+}
+.teacher-item{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  border:1px solid var(--line);
+  border-radius:9px;
+  background:#fff;
+  padding:7px 8px;
+  transition:.15s;
+}
+.teacher-item:hover{
+  border-color:#9bb5ff;
+  background:#f8faff;
+}
+.absence-check{
+  width:19px;
+  height:19px;
+  flex:0 0 auto;
+  cursor:pointer;
+}
+.teacher-btn{
+  flex:1;
+  width:auto;
+  text-align:left;
+  background:transparent;
+  color:var(--text);
+  border:0;
+  min-height:38px;
+  padding:7px 6px;
+  transition:.15s;
+}
+.teacher-btn:hover{
+  background:#f1f5ff;
+}
+.teacher-btn.active{
+  background:var(--soft);
+  color:#123a9d;
+}
+.absence-panel{
+  border:2px solid #b8c9fa;
+  background:#f7f9ff;
+}
+.absence-controls{
+  display:grid;
+  grid-template-columns:minmax(180px,260px) 1fr;
+  gap:14px;
+  align-items:end;
+}
+.absence-day label{
+  display:block;
+  font-size:12px;
+  color:var(--muted);
+  margin-bottom:5px;
+  font-weight:700;
+}
+.absence-day select{
+  width:100%;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  padding:10px 11px;
+  background:white;
+  color:var(--text);
+}
+.selected-box{
+  padding:11px 13px;
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:9px;
+}
+.selected-names{
+  margin-top:5px;
+  color:#48556d;
+  font-size:13px;
+}
+
+.absence-config-list{
+  margin-top:14px;
+  display:grid;
+  gap:10px;
+}
+.absence-person{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:12px;
+}
+.absence-person-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+}
+.absence-person-name{
+  font-weight:800;
+}
+.absence-mode{
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  padding:8px 10px;
+  background:#fff;
+  min-width:160px;
+}
+.absence-hours{
+  margin-top:10px;
+  display:grid;
+  gap:7px;
+}
+.absence-hour-option{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:9px;
+  align-items:start;
+  padding:8px 9px;
+  border:1px solid #e1e7f0;
+  border-radius:8px;
+  background:#fafbfd;
+}
+.absence-hour-option input{
+  margin-top:3px;
+}
+.absence-hour-main{
+  font-size:13px;
+  line-height:1.35;
+}
+.absence-hour-main b{
+  display:inline-block;
+  min-width:88px;
+}
+.absence-hour-extra{
+  color:#667085;
+  font-size:12px;
+  margin-top:2px;
+}
+#scheduleHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+}
+#selectedTeacher{font-size:22px;font-weight:800}
+.schedule-wrap{
+  overflow:auto;
+  border:1px solid var(--line);
+  border-radius:10px;
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  min-width:820px;
+}
+th,td{
+  border:1px solid #dfe5ee;
+  padding:8px;
+  vertical-align:middle;
+  text-align:center;
+}
+thead th{
+  background:#ecf2ff;
+  color:#173a94;
+  font-weight:800;
+}
+tbody th{
+  background:#f8fafc;
+  width:125px;
+  font-weight:800;
+}
+.class-cell{
+  white-space:pre-line;
+  line-height:1.3;
+  min-height:54px;
+}
+.class-cell .subject{font-weight:800}
+.class-cell .course{margin-top:2px}
+.class-cell .room{margin-top:2px;color:#536178;font-size:12px}
+.empty{color:#b2bac7}
+footer{
+  margin-top:24px;
+  text-align:center;
+  color:#7c879a;
+  font-size:12px;
+}
+@media(max-width:700px){
+  .teacher-list{grid-template-columns:1fr}
+}
+
+.author-footer{
+  margin-top:28px;
+  padding:18px 14px 6px;
+  text-align:center;
+  color:#667085;
+  font-size:12px;
+  line-height:1.6;
+}
+.author-footer strong{
+  color:#344054;
+  font-size:13px;
+}
+
+</style>
+</head>
+<body>
+<header>
+  <h1>Lector de horarios de profesores</h1>
+  <p>Excel unificado → profesores → selección de ausencias → PDF mañana + tarde</p>
+</header>
+
+<main>
+  <section class="card">
+    <h2>1. Cargar archivo Excel</h2>
+    <div class="row">
+      <input id="excelFile" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
+      <button id="loadBtn" disabled>Leer horarios</button>
+    </div>
+    <div id="status" class="notice">
+      Selecciona el Excel que contiene los horarios. El archivo se procesa dentro del navegador.
+    </div>
+  </section>
+
+  <section id="summaryCard" class="card hidden">
+    <h2>2. Profesores encontrados</h2>
+    <div class="stats">
+      <div class="stat">
+        <span class="small">Profesores detectados</span>
+        <b id="teacherCount">0</b>
+      </div>
+      <div class="stat">
+        <span class="small">Hojas analizadas</span>
+        <b id="sheetCount">0</b>
+      </div>
+    </div>
+    <div id="warningBox" class="notice warn hidden"></div>
+  </section>
+
+  <section id="teachersCard" class="card hidden">
+    <h2>Listado de profesores</h2>
+    <p class="small">Pulsa el nombre para ver el horario. Marca la casilla de uno o varios profesores para preparar una ausencia.</p>
+    <input id="teacherSearch" type="text" placeholder="Buscar profesor...">
+    <div id="teacherList" class="teacher-list"></div>
+  </section>
+
+  <section id="absenceCard" class="card absence-panel hidden">
+    <h2>3. Preparar ausencia</h2>
+    <div class="absence-controls">
+      <div class="absence-day">
+        <label for="absenceDay">Día que van a faltar</label>
+        <select id="absenceDay">
+          <option value="Lunes">Lunes</option>
+          <option value="Martes">Martes</option>
+          <option value="Miércoles">Miércoles</option>
+          <option value="Jueves">Jueves</option>
+          <option value="Viernes">Viernes</option>
+        </select>
+      </div>
+      <div class="selected-box">
+        <b><span id="absenceCount">0</span> profesor(es) seleccionado(s)</b>
+        <div id="absenceNames" class="selected-names">Ningún profesor seleccionado.</div>
+      </div>
+    </div>
+    <div id="absenceConfigList" class="absence-config-list"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="absencePdfBtn" disabled>Generar PDF completo mañana + tarde</button>
+      <button id="clearAbsenceBtn" class="secondary">Quitar selección</button>
+    </div>
+    <div class="small" style="margin-top:10px">
+      El PDF genera mañana y tarde con el nuevo formato: huecos variables por franja, patios, incidencias y registro de aula trabajo. El texto se ajusta automáticamente para no salirse de las celdas.
+    </div>
+  </section>
+
+  <section id="scheduleCard" class="card hidden">
+    <div id="scheduleHeader">
+      <div>
+        <div class="small">Horario del profesor</div>
+        <div id="selectedTeacher"></div>
+      </div>
+      <div class="row">
+        <button id="pdfBtn">Generar PDF</button>
+        <button id="closeScheduleBtn" class="secondary">Cerrar horario</button>
+      </div>
+    </div>
+    <div class="schedule-wrap">
+      <table id="scheduleTable">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Lunes</th>
+            <th>Martes</th>
+            <th>Miércoles</th>
+            <th>Jueves</th>
+            <th>Viernes</th>
+          </tr>
+        </thead>
+        <tbody id="scheduleBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="author-footer">
+  <div><strong>🄯 Copyleft Antonio Vives Córdoba</strong></div>
+  <div>Programa gratuito. Se permite su uso, copia y modificación siempre que se cite al autor.</div>
+  <div>Queda prohibido cualquier uso, distribución o modificación con fines lucrativos.</div>
+</footer>
+</main>
+
+<script>
+const DAYS = ["Lunes","Martes","Miércoles","Jueves","Viernes"];
+const DAY_ALIASES = {
+  "lunes":"Lunes","lun":"Lunes",
+  "martes":"Martes","mar":"Martes",
+  "miercoles":"Miércoles","miércoles":"Miércoles","mie":"Miércoles","mié":"Miércoles",
+  "jueves":"Jueves","jue":"Jueves",
+  "viernes":"Viernes","vie":"Viernes"
+};
+
+let app = {
+  fileName:"",
+  sheets:0,
+  teachers:[],
+  selected:null,
+  warnings:[],
+  absentTeachers:new Set(),
+  absenceConfigs:new Map()
+};
+
+const $ = id => document.getElementById(id);
+
+$("excelFile").addEventListener("change", () => {
+  $("loadBtn").disabled = !$("excelFile").files.length;
+});
+$("loadBtn").addEventListener("click", loadExcel);
+$("teacherSearch").addEventListener("input", renderTeacherList);
+$("pdfBtn").addEventListener("click", generatePDF);
+$("absencePdfBtn").addEventListener("click", generateAbsencePDF);
+$("absenceDay").addEventListener("change", () => {
+  const day=$("absenceDay").value;
+  for(const [name,cfg] of app.absenceConfigs.entries()){
+    if(cfg.mode==="partial"){
+      const teacher=app.teachers.find(t=>t.name===name);
+      const rows=teacher ? absenceRowsForTeacher(teacher,day) : [];
+      cfg.selectedTimes=new Set(rows.map(r=>timeKey(r.time)));
+    }
+  }
+  updateAbsencePanel();
+});
+$("clearAbsenceBtn").addEventListener("click", () => {
+  app.absentTeachers.clear();
+  app.absenceConfigs.clear();
+  updateAbsencePanel();
+  renderTeacherList();
+});
+$("closeScheduleBtn").addEventListener("click", () => {
+  app.selected = null;
+  $("scheduleCard").classList.add("hidden");
+  document.querySelectorAll(".teacher-btn").forEach(b => b.classList.remove("active"));
+});
+
+function norm(value){
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .replace(/\u00a0/g," ")
+    .replace(/\s+/g," ")
+    .trim()
+    .toLowerCase();
+}
+function clean(value){
+  return String(value ?? "").replace(/\r\n/g,"\n").replace(/\r/g,"\n").trim();
+}
+function esc(value){
+  return String(value ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[ch]));
+}
+function dayName(value){
+  const n = norm(value).replace(/[.:]/g,"");
+  if(DAY_ALIASES[n]) return DAY_ALIASES[n];
+  for(const [key,day] of Object.entries(DAY_ALIASES)){
+    if(n === key || n.startsWith(key+" ")) return day;
+  }
+  return null;
+}
+function isTimeLike(value){
+  const s = clean(value)
+    .replace(/[–—]/g,"-")
+    .replace(/\./g,":");
+  return /\b\d{1,2}:\d{2}\b/.test(s) ||
+         /^\s*\d{1,2}\s*[-:]\s*\d{1,2}\s*$/.test(s);
+}
+function parseTimeLabel(value){
+  const s = clean(value).replace(/[–—]/g,"-").replace(/\./g,":");
+  const times = [...s.matchAll(/\b\d{1,2}:\d{2}\b/g)].map(m=>m[0]);
+  if(times.length >= 2) return `${times[0]} - ${times[1]}`;
+  if(times.length === 1) return times[0];
+  return clean(value);
+}
+function isMostlyEmptyRow(row){
+  return row.filter(v => clean(v) !== "").length === 0;
+}
+function countDaysInRow(row){
+  const found = [];
+  row.forEach((v,c) => {
+    const d = dayName(v);
+    if(d && !found.some(x=>x.day===d)) found.push({day:d,col:c});
+  });
+  return found;
+}
+function usefulName(value){
+  const s = clean(value);
+  if(!s) return false;
+  if(dayName(s)) return false;
+  if(isTimeLike(s)) return false;
+  const n=norm(s);
+  if(/^(horario|profesor|profesora|docente|curso|grupo|aula|materia|asignatura)$/.test(n)) return false;
+  if(n.length < 3) return false;
+  return true;
+}
+function stripProfessorPrefix(value){
+  let s = clean(value);
+  s = s.replace(/^\s*(profesor(?:a)?|docente)\s*[:\-]\s*/i,"");
+  return s.trim();
+}
+function splitCell(value){
+  const raw = clean(value);
+  if(!raw) return {subject:"",course:"",room:"",raw:""};
+  let lines = raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+
+  // Si el Excel perdió los saltos pero usa " | ", se respeta.
+  if(lines.length===1 && /\s+\|\s+/.test(lines[0])){
+    lines = lines[0].split(/\s+\|\s+/).map(x=>x.trim()).filter(Boolean);
+  }
+
+  return {
+    subject: lines[0] || "",
+    course: lines[1] || "",
+    room: lines.length >= 3 ? lines.slice(2).join(" · ") : "",
+    raw
+  };
+}
+function canonicalTeacherName(name){
+  return stripProfessorPrefix(name).replace(/\s+/g," ").trim();
+}
+function chooseProfessorName(rows, headerRow, sheetName, previousHeaderRow){
+  // 1) Busca hacia arriba, hasta 8 filas o hasta el bloque anterior.
+  const lowerLimit = Math.max(previousHeaderRow + 1, headerRow - 8);
+  for(let r=headerRow-1; r>=lowerLimit; r--){
+    const nonEmpty = rows[r]
+      .map((v,c)=>({v:clean(v),c}))
+      .filter(x=>x.v);
+    if(!nonEmpty.length) continue;
+
+    // Prioridad: celda con "Profesor: Nombre"
+    const explicit = nonEmpty.find(x => /profesor(?:a)?\s*:/i.test(x.v) || /docente\s*:/i.test(x.v));
+    if(explicit){
+      const name = canonicalTeacherName(explicit.v);
+      if(usefulName(name)) return name;
+    }
+
+    // Si solo hay una celda con texto en la fila, suele ser el nombre/título.
+    if(nonEmpty.length===1 && usefulName(nonEmpty[0].v)){
+      const candidate = canonicalTeacherName(nonEmpty[0].v);
+      if(!/horario/i.test(candidate)) return candidate;
+    }
+
+    // Busca texto largo no horario ni días.
+    for(const x of nonEmpty){
+      if(usefulName(x.v) && !/horario/i.test(x.v)){
+        const candidate=canonicalTeacherName(x.v);
+        if(candidate.split(/\s+/).length>=2) return candidate;
+      }
+    }
+  }
+
+  // 2) Nombre de la hoja si no es genérico.
+  if(sheetName && !/^hoja\d*$/i.test(sheetName) && !/^sheet\d*$/i.test(sheetName)){
+    return canonicalTeacherName(sheetName);
+  }
+
+  return `Profesor sin identificar`;
+}
+function detectEndRow(rows, headerRow, nextHeaderRow){
+  if(nextHeaderRow !== null) return nextHeaderRow - 1;
+  let last = rows.length - 1;
+
+  // Recorta después de varias filas vacías tras empezar el horario.
+  let emptyStreak = 0;
+  for(let r=headerRow+1;r<rows.length;r++){
+    if(isMostlyEmptyRow(rows[r])) emptyStreak++;
+    else emptyStreak=0;
+    if(emptyStreak>=3){
+      last=r-3;
+      break;
+    }
+  }
+  return last;
+}
+function findTimeColumn(rows, headerRow, endRow, dayCols){
+  const firstDay = Math.min(...dayCols.map(x=>x.col));
+  let bestCol = Math.max(0, firstDay-1);
+  let bestScore = -1;
+
+  for(let c=0;c<firstDay;c++){
+    let score=0;
+    for(let r=headerRow+1;r<=endRow;r++){
+      if(isTimeLike(rows[r]?.[c])) score++;
+    }
+    if(score>bestScore){
+      bestScore=score;
+      bestCol=c;
+    }
+  }
+  return bestCol;
+}
+function extractScheduleBlock(rows, sheetName, headerRow, nextHeaderRow, previousHeaderRow){
+  const dayDefs = countDaysInRow(rows[headerRow]);
+  const dayMap = {};
+  dayDefs.forEach(x=>dayMap[x.day]=x.col);
+
+  const endRow = detectEndRow(rows,headerRow,nextHeaderRow);
+  const timeCol = findTimeColumn(rows,headerRow,endRow,dayDefs);
+  const name = chooseProfessorName(rows,headerRow,sheetName,previousHeaderRow);
+
+  const periods=[];
+  for(let r=headerRow+1;r<=endRow;r++){
+    const timeVal = rows[r]?.[timeCol];
+    if(!isTimeLike(timeVal)) continue;
+
+    const period = {
+      time:parseTimeLabel(timeVal),
+      cells:{}
+    };
+    let any=false;
+    for(const day of DAYS){
+      const col=dayMap[day];
+      if(col===undefined){
+        period.cells[day]={subject:"",course:"",room:"",raw:""};
+        continue;
+      }
+      const parsed=splitCell(rows[r]?.[col]);
+      period.cells[day]=parsed;
+      if(parsed.raw) any=true;
+    }
+
+    // Guardamos también franjas sin clase: son útiles para reconstruir la cuadrícula completa.
+    period.any=any;
+    periods.push(period);
+  }
+
+  // Elimina duplicados de franja conservando la primera aparición.
+  const seen=new Set();
+  const uniquePeriods=periods.filter(p=>{
+    const k=norm(p.time);
+    if(!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
+  return {
+    name,
+    sheet:sheetName,
+    headerRow,
+    periods:uniquePeriods,
+    foundDays:dayDefs.map(x=>x.day)
+  };
+}
+function mergeTeacherBlocks(blocks){
+  const map=new Map();
+
+  blocks.forEach(block=>{
+    const name=canonicalTeacherName(block.name);
+    const key=norm(name);
+    if(!map.has(key)){
+      map.set(key,{
+        name,
+        periods:[],
+        sources:[],
+        daySet:new Set()
+      });
+    }
+    const t=map.get(key);
+    t.sources.push(block.sheet);
+    block.foundDays.forEach(d=>t.daySet.add(d));
+
+    block.periods.forEach(p=>{
+      let existing=t.periods.find(x=>norm(x.time)===norm(p.time));
+      if(!existing){
+        existing={time:p.time,cells:{}};
+        DAYS.forEach(d=>existing.cells[d]={subject:"",course:"",room:"",raw:""});
+        t.periods.push(existing);
+      }
+      DAYS.forEach(day=>{
+        const incoming=p.cells[day];
+        if(incoming?.raw && !existing.cells[day]?.raw){
+          existing.cells[day]=incoming;
+        }
+      });
+    });
+  });
+
+  const teachers=[...map.values()].map(t=>{
+    // Orden por hora inicial cuando existe.
+    t.periods.sort((a,b)=>timeSortKey(a.time)-timeSortKey(b.time));
+    t.sources=[...new Set(t.sources)];
+    t.daySet=[...t.daySet];
+    return t;
+  });
+
+  return teachers
+    .filter(t=>t.periods.length>0)
+    .sort((a,b)=>a.name.localeCompare(b.name,"es",{sensitivity:"base"}));
+}
+function timeSortKey(label){
+  const m=String(label).match(/(\d{1,2}):(\d{2})/);
+  if(!m) return 99999;
+  return parseInt(m[1])*60+parseInt(m[2]);
+}
+
+async function loadExcel(){
+  const file=$("excelFile").files[0];
+  if(!file) return;
+
+  if(typeof XLSX==="undefined"){
+    $("status").className="notice warn";
+    $("status").textContent="No se ha podido cargar la librería para leer Excel. Comprueba que tienes conexión a Internet y vuelve a abrir el programa.";
+    return;
+  }
+
+  $("status").className="notice";
+  $("status").textContent="Leyendo el Excel y buscando las tablas de horarios…";
+
+  try{
+    const data=await file.arrayBuffer();
+    const wb=XLSX.read(data,{
+      type:"array",
+      cellText:true,
+      cellDates:false,
+      raw:false
+    });
+
+    app.fileName=file.name;
+    app.sheets=wb.SheetNames.length;
+    app.warnings=[];
+    const blocks=[];
+
+    wb.SheetNames.forEach(sheetName=>{
+      const ws=wb.Sheets[sheetName];
+
+      // header:1 conserva las filas/columnas; defval evita undefined.
+      const rows=XLSX.utils.sheet_to_json(ws,{
+        header:1,
+        defval:"",
+        raw:false,
+        blankrows:true
+      });
+
+      if(!rows.length) return;
+
+      const headerRows=[];
+      rows.forEach((row,r)=>{
+        const days=countDaysInRow(row);
+        // Con 3 o más días de la semana damos por localizada una tabla.
+        if(days.length>=3) headerRows.push(r);
+      });
+
+      if(!headerRows.length){
+        app.warnings.push(`No se encontró una fila de días en la hoja "${sheetName}".`);
+        return;
+      }
+
+      headerRows.forEach((headerRow,index)=>{
+        const nextHeaderRow = index<headerRows.length-1 ? headerRows[index+1] : null;
+        const previousHeaderRow = index>0 ? headerRows[index-1] : -1;
+        const block=extractScheduleBlock(rows,sheetName,headerRow,nextHeaderRow,previousHeaderRow);
+        if(block.periods.length){
+          blocks.push(block);
+        }
+      });
+    });
+
+    app.teachers=mergeTeacherBlocks(blocks);
+    // Orden alfabético explícito por nombre, ignorando mayúsculas y acentos.
+    app.teachers.sort((a,b)=>a.name.localeCompare(b.name,"es",{sensitivity:"base"}));
+    app.selected=null;
+    app.absentTeachers=new Set();
+    app.absenceConfigs=new Map();
+
+    $("teacherCount").textContent=app.teachers.length;
+    $("sheetCount").textContent=app.sheets;
+    $("summaryCard").classList.remove("hidden");
+    $("teachersCard").classList.remove("hidden");
+    $("absenceCard").classList.remove("hidden");
+    $("scheduleCard").classList.add("hidden");
+    updateAbsencePanel();
+
+    if(app.warnings.length){
+      $("warningBox").classList.remove("hidden");
+      $("warningBox").textContent=
+        `Aviso: ${app.warnings.length} hoja(s) o bloque(s) no se pudieron interpretar. `+
+        `Si falta algún profesor, revisaremos el formato de ese Excel concreto.`;
+    }else{
+      $("warningBox").classList.add("hidden");
+    }
+
+    renderTeacherList();
+
+    if(app.teachers.length){
+      $("status").textContent=
+        `Lectura terminada: ${app.teachers.length} profesor(es) encontrados. Pulsa un nombre para ver su horario.`;
+    }else{
+      $("status").className="notice warn";
+      $("status").textContent=
+        "No se ha detectado ningún horario. El programa busca una fila con al menos tres días de la semana y las franjas horarias en una columna.";
+    }
+
+  }catch(err){
+    console.error(err);
+    $("status").className="notice warn";
+    $("status").textContent="No se ha podido leer el Excel: "+err.message;
+  }
+}
+
+function renderTeacherList(){
+  const q=norm($("teacherSearch").value);
+
+  // Siempre en orden alfabético.
+  const list=[...app.teachers]
+    .sort((a,b)=>a.name.localeCompare(b.name,"es",{sensitivity:"base"}))
+    .filter(t=>!q || norm(t.name).includes(q));
+
+  $("teacherList").innerHTML=list.map(t=>{
+    const active=app.selected && norm(app.selected.name)===norm(t.name) ? " active" : "";
+    const checked=app.absentTeachers.has(t.name) ? " checked" : "";
+    return `<div class="teacher-item">
+      <input class="absence-check" type="checkbox" data-absence-name="${esc(t.name)}"${checked}
+             title="Seleccionar para ausencia">
+      <button class="teacher-btn${active}" data-name="${esc(t.name)}">${esc(t.name)}</button>
+    </div>`;
+  }).join("");
+
+  document.querySelectorAll(".teacher-btn").forEach(btn=>{
+    btn.addEventListener("click",()=>{
+      const name=btn.getAttribute("data-name");
+      const teacher=app.teachers.find(t=>t.name===name);
+      if(teacher) showSchedule(teacher);
+    });
+  });
+
+  document.querySelectorAll(".absence-check").forEach(chk=>{
+    chk.addEventListener("change",()=>{
+      const name=chk.getAttribute("data-absence-name");
+
+      if(chk.checked){
+        app.absentTeachers.add(name);
+        if(!app.absenceConfigs.has(name)){
+          app.absenceConfigs.set(name,{
+            mode:"all",
+            selectedTimes:new Set()
+          });
+        }
+      }else{
+        app.absentTeachers.delete(name);
+        app.absenceConfigs.delete(name);
+      }
+
+      updateAbsencePanel();
+    });
+  });
+}
+
+function activityLabel(row){
+  const subject=(row.subject||"").trim();
+  const course=(row.course||"").trim();
+  const room=(row.room||"").trim();
+
+  const mainSubject = subject && subject!=="-" ? subject : "Sin asignatura indicada";
+  const extra=[course && course!=="-" ? course : "", room && room!=="-" ? room : ""]
+    .filter(Boolean)
+    .join(" · ");
+
+  return {mainSubject,extra};
+}
+
+function updateAbsencePanel(){
+  const day=$("absenceDay").value;
+  const names=[...app.absentTeachers]
+    .sort((a,b)=>a.localeCompare(b,"es",{sensitivity:"base"}));
+
+  $("absenceCount").textContent=names.length;
+  $("absenceNames").textContent=names.length ? names.join(" · ") : "Ningún profesor seleccionado.";
+  $("absencePdfBtn").disabled=names.length===0;
+
+  if(!names.length){
+    $("absenceConfigList").innerHTML="";
+    return;
+  }
+
+  $("absenceConfigList").innerHTML=names.map(name=>{
+    const teacher=app.teachers.find(t=>t.name===name);
+    const rows=teacher ? absenceRowsForTeacher(teacher,day) : [];
+    const cfg=app.absenceConfigs.get(name) || {mode:"all",selectedTimes:new Set()};
+    app.absenceConfigs.set(name,cfg);
+
+    const options=rows.map(row=>{
+      const key=timeKey(row.time);
+      const checked=cfg.mode==="partial" && cfg.selectedTimes.has(key) ? " checked" : "";
+      const label=activityLabel(row);
+
+      return `<label class="absence-hour-option">
+        <input type="checkbox"
+               class="absence-hour-check"
+               data-config-name="${esc(name)}"
+               data-time-key="${esc(key)}"${checked}>
+        <span class="absence-hour-main">
+          <b>${esc(row.time)}</b> · ${esc(label.mainSubject)}
+          ${label.extra ? `<div class="absence-hour-extra">${esc(label.extra)}</div>` : ""}
+        </span>
+      </label>`;
+    }).join("");
+
+    return `<div class="absence-person">
+      <div class="absence-person-head">
+        <div>
+          <div class="absence-person-name">${esc(name)}</div>
+          <div class="small">${esc(day)} · ${rows.length} actividad(es) detectada(s)</div>
+        </div>
+        <select class="absence-mode" data-mode-name="${esc(name)}">
+          <option value="all"${cfg.mode==="all" ? " selected" : ""}>Todo el día</option>
+          <option value="partial"${cfg.mode==="partial" ? " selected" : ""}>Elegir horas</option>
+        </select>
+      </div>
+
+      <div class="absence-hours${cfg.mode==="all" ? " hidden" : ""}">
+        ${rows.length ? options : `<div class="small">No hay actividades detectadas para este profesor ese día.</div>`}
+      </div>
+    </div>`;
+  }).join("");
+
+  document.querySelectorAll(".absence-mode").forEach(sel=>{
+    sel.addEventListener("change",()=>{
+      const name=sel.getAttribute("data-mode-name");
+      const teacher=app.teachers.find(t=>t.name===name);
+      const cfg=app.absenceConfigs.get(name) || {mode:"all",selectedTimes:new Set()};
+
+      cfg.mode=sel.value;
+
+      // Al pasar a "Elegir horas", por defecto quedan marcadas todas.
+      // El usuario puede desmarcar complementarias, reuniones, etc.
+      if(cfg.mode==="partial"){
+        const rows=teacher ? absenceRowsForTeacher(teacher,day) : [];
+        cfg.selectedTimes=new Set(rows.map(r=>timeKey(r.time)));
+      }else{
+        cfg.selectedTimes=new Set();
+      }
+
+      app.absenceConfigs.set(name,cfg);
+      updateAbsencePanel();
+    });
+  });
+
+  document.querySelectorAll(".absence-hour-check").forEach(chk=>{
+    chk.addEventListener("change",()=>{
+      const name=chk.getAttribute("data-config-name");
+      const key=chk.getAttribute("data-time-key");
+      const cfg=app.absenceConfigs.get(name) || {mode:"partial",selectedTimes:new Set()};
+
+      if(chk.checked) cfg.selectedTimes.add(key);
+      else cfg.selectedTimes.delete(key);
+
+      app.absenceConfigs.set(name,cfg);
+    });
+  });
+}
+
+function showSchedule(teacher){
+  app.selected=teacher;
+  $("selectedTeacher").textContent=teacher.name;
+
+  const body=teacher.periods.map(p=>{
+    const cells=DAYS.map(day=>{
+      const c=p.cells[day]||{};
+      if(!c.raw) return `<td><span class="empty">—</span></td>`;
+      return `<td>
+        <div class="class-cell">
+          ${c.subject?`<div class="subject">${esc(c.subject)}</div>`:""}
+          ${c.course?`<div class="course">${esc(c.course)}</div>`:""}
+          ${c.room?`<div class="room">${esc(c.room)}</div>`:""}
+        </div>
+      </td>`;
+    }).join("");
+    return `<tr><th>${esc(p.time)}</th>${cells}</tr>`;
+  }).join("");
+
+  $("scheduleBody").innerHTML=body || `<tr><td colspan="6">No hay franjas horarias detectadas.</td></tr>`;
+  $("scheduleCard").classList.remove("hidden");
+  renderTeacherList();
+  $("scheduleCard").scrollIntoView({behavior:"smooth",block:"start"});
+}
+
+
+function pdfLatin1(s){
+  return String(s ?? "")
+    .replace(/[“”]/g,'"').replace(/[‘’]/g,"'")
+    .replace(/[–—]/g,"-").replace(/…/g,"...")
+    .replace(/€/g,"EUR")
+    .replace(/[^\x00-\xFF]/g, ch => {
+      const map={"œ":"oe","Œ":"OE","š":"s","Š":"S","ž":"z","Ž":"Z","Ÿ":"Y"};
+      return map[ch] || "?";
+    });
+}
+function pdfEscape(s){
+  return pdfLatin1(s).replace(/\\/g,"\\\\").replace(/\(/g,"\\(").replace(/\)/g,"\\)");
+}
+function wrapForPdf(text, width, fontSize, maxLines=3){
+  text=String(text ?? "").trim();
+  if(!text) return [];
+  const avg = fontSize * 0.51;
+  const maxChars = Math.max(4, Math.floor(width/avg));
+  const words = text.split(/\s+/);
+  const lines=[];
+  let line="";
+  for(const word of words){
+    const test=line ? line+" "+word : word;
+    if(test.length<=maxChars){
+      line=test;
+    }else{
+      if(line) lines.push(line);
+      if(word.length>maxChars){
+        let rest=word;
+        while(rest.length>maxChars && lines.length<maxLines-1){
+          lines.push(rest.slice(0,maxChars));
+          rest=rest.slice(maxChars);
+        }
+        line=rest;
+      }else line=word;
+    }
+    if(lines.length>=maxLines-1) break;
+  }
+  if(line && lines.length<maxLines) lines.push(line);
+  if(lines.length===maxLines){
+    const used=lines.join(" ").length;
+    if(used<text.length && lines[maxLines-1].length>3){
+      lines[maxLines-1]=lines[maxLines-1].slice(0,Math.max(1,maxChars-3))+"...";
+    }
+  }
+  return lines;
+}
+function pdfText(cmds,text,x,y,size=8,bold=false,align="left"){
+  const safe=pdfEscape(text);
+  let tx=x;
+  if(align!=="left"){
+    const approx=pdfLatin1(text).length*size*0.49;
+    if(align==="center") tx=x-approx/2;
+    if(align==="right") tx=x-approx;
+  }
+  cmds.push(`BT /${bold?"F2":"F1"} ${size.toFixed(2)} Tf 1 0 0 1 ${tx.toFixed(2)} ${y.toFixed(2)} Tm (${safe}) Tj ET`);
+}
+function pdfLine(cmds,x1,y1,x2,y2,width=0.5){
+  cmds.push(`${width.toFixed(2)} w ${x1.toFixed(2)} ${y1.toFixed(2)} m ${x2.toFixed(2)} ${y2.toFixed(2)} l S`);
+}
+function pdfRect(cmds,x,y,w,h,width=0.5){
+  cmds.push(`${width.toFixed(2)} w ${x.toFixed(2)} ${y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re S`);
+}
+function pdfFillRect(cmds,x,y,w,h,r=1,g=1,b=1){
+  cmds.push(`${r.toFixed(3)} ${g.toFixed(3)} ${b.toFixed(3)} rg ${x.toFixed(2)} ${y.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} re f 0 G`);
+}
+function buildPdfBlob(pageStreams,pageWidth=595.28,pageHeight=841.89){
+  const objects=[];
+  objects[1]='<< /Type /Catalog /Pages 2 0 R >>';
+  const kids=[];
+  for(let i=0;i<pageStreams.length;i++) kids.push(`${5+i*2} 0 R`);
+  objects[2]=`<< /Type /Pages /Kids [${kids.join(" ")}] /Count ${pageStreams.length} >>`;
+  objects[3]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  objects[4]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+
+  pageStreams.forEach((stream,i)=>{
+    const pageObj=5+i*2, contentObj=6+i*2;
+    objects[pageObj]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentObj} 0 R >>`;
+    objects[contentObj]=`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  });
+
+  let pdf="%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
+  const offsets=[0];
+  for(let i=1;i<objects.length;i++){
+    offsets[i]=pdf.length;
+    pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xref=pdf.length;
+  pdf += `xref\n0 ${objects.length}\n`;
+  pdf += `0000000000 65535 f \n`;
+  for(let i=1;i<objects.length;i++){
+    pdf += String(offsets[i]).padStart(10,"0")+" 00000 n \n";
+  }
+  pdf += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+
+  const bytes=new Uint8Array(pdf.length);
+  for(let i=0;i<pdf.length;i++) bytes[i]=pdf.charCodeAt(i)&255;
+  return new Blob([bytes],{type:"application/pdf"});
+}
+function savePdfBlob(blob,filename){
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+function safeFileName(name){
+  return name.replace(/[\\/:*?"<>|]+/g,"_").replace(/\s+/g," ").trim();
+}
+
+function schedulePdfStream(teacher){
+  const W=595.28,H=841.89;
+  const cmds=["0 G"];
+  const left=28,right=28,top=42,bottom=28;
+  const titleY=H-top;
+  pdfText(cmds,`Horario - ${teacher.name}`,W/2,titleY,15,true,"center");
+
+  const rows=teacher.periods.length || 1;
+  const tableTop=H-70;
+  const tableBottom=bottom;
+  const headerH=27;
+  const usable=tableTop-tableBottom-headerH;
+  const rowH=Math.min(66,Math.max(28,usable/rows));
+  const fontSize = rowH>=48 ? 7.3 : rowH>=36 ? 6.4 : 5.5;
+
+  const tableW=W-left-right;
+  const timeW=72;
+  const dayW=(tableW-timeW)/5;
+  const cols=[left,left+timeW];
+  for(let i=1;i<=5;i++) cols.push(left+timeW+i*dayW);
+
+  let y=tableTop;
+
+  // Header
+  pdfRect(cmds,left,y-headerH,tableW,headerH,0.6);
+  for(let i=1;i<6;i++) pdfLine(cmds,cols[i],y,cols[i],y-headerH,0.4);
+  pdfText(cmds,"Hora",left+timeW/2,y-18,7,true,"center");
+  DAYS.forEach((d,i)=>pdfText(cmds,d,left+timeW+dayW*i+dayW/2,y-18,7,true,"center"));
+  y-=headerH;
+
+  teacher.periods.forEach(p=>{
+    pdfRect(cmds,left,y-rowH,tableW,rowH,0.45);
+    for(let i=1;i<6;i++) pdfLine(cmds,cols[i],y,cols[i],y-rowH,0.35);
+    pdfText(cmds,p.time,left+timeW/2,y-rowH/2-2,6.6,true,"center");
+
+    DAYS.forEach((day,i)=>{
+      const c=p.cells[day]||{};
+      const parts=[c.subject,c.course,c.room].filter(Boolean);
+      const cx=left+timeW+i*dayW;
+      const innerW=dayW-7;
+      const lines=[];
+      parts.forEach((part,idx)=>{
+        const wrapped=wrapForPdf(part,innerW,fontSize,idx===0?2:1);
+        wrapped.forEach(line=>lines.push({text:line,bold:idx===0}));
+      });
+      const lineH=fontSize+2.0;
+      const totalH=lines.length*lineH;
+      let ty=y-(rowH-totalH)/2-fontSize;
+      lines.slice(0,4).forEach(line=>{
+        pdfText(cmds,line.text,cx+dayW/2,ty,fontSize,line.bold,"center");
+        ty-=lineH;
+      });
+    });
+    y-=rowH;
+  });
+  return cmds.join("\n");
+}
+
+function generatePDF(){
+  const teacher=app.selected;
+  if(!teacher) return;
+  const blob=buildPdfBlob([schedulePdfStream(teacher)]);
+  savePdfBlob(blob,`Horario_${safeFileName(teacher.name)}.pdf`);
+}
+
+function absenceRowsForTeacher(teacher,day){
+  return teacher.periods
+    .map(p=>{
+      const c=p.cells[day]||{};
+      return {
+        time:p.time,
+        subject:c.subject||"",
+        course:c.course||"",
+        room:c.room||"",
+        raw:c.raw||""
+      };
+    })
+    .filter(x=>x.raw || x.subject || x.course || x.room);
+}
+
+const ABSENCE_TEMPLATE = [
+  // MAÑANA
+  {id:"m1", shift:"morning", period:"1ª", time:"7:55 - 8:50", starts:["7:55"]},
+  {id:"m2", shift:"morning", period:"2ª", time:"8:50 - 9:45", starts:["8:50"]},
+  {id:"m3", shift:"morning", period:"3ª", time:"9:45 - 10:40", starts:["9:45"]},
+  {id:"mp1", shift:"morning", recess:"1º PATIO"},
+  {id:"m4", shift:"morning", period:"4ª", time:"11:05 - 12:00", starts:["11:05"]},
+  {id:"m5", shift:"morning", period:"5ª", time:"12:00 - 12:55", starts:["12:00"]},
+  {id:"mp2", shift:"morning", recess:"2º PATIO"},
+  {id:"m6", shift:"morning", period:"6ª", time:"13:10 - 14:05", starts:["13:10"]},
+  {id:"m7", shift:"morning", period:"7ª", time:"14:05 - 15:00", starts:["14:05"]},
+
+  // TARDE
+  {id:"a1", shift:"afternoon", period:"1ª", time:"15:15 - 16:10", starts:["15:15"]},
+  {id:"a2", shift:"afternoon", period:"2ª", time:"16:10 - 17:05", starts:["16:10"]},
+  {id:"a3", shift:"afternoon", period:"3ª", time:"17:05 - 18:00", starts:["17:05"]},
+  {id:"ap1", shift:"afternoon", recess:"1º PATIO"},
+  {id:"a4", shift:"afternoon", period:"4ª", time:"18:20 - 19:15", starts:["18:20"]},
+  {id:"a5", shift:"afternoon", period:"5ª", time:"19:15 - 20:10", starts:["19:15"]},
+  {id:"a6", shift:"afternoon", period:"6ª", time:"20:10 - 21:00", starts:["20:10"]},
+  {id:"ap2", shift:"afternoon", recess:"2º PATIO"},
+  // Aceptamos tanto el horario actual 21:05 como la plantilla 21:10.
+  {id:"a7", shift:"afternoon", period:"7ª", time:"21:10 - 22:05", starts:["21:05","21:10"]}
+];
+
+function timeKey(label){
+  return String(label||"")
+    .replace(/[–—]/g,"-")
+    .replace(/\s+/g,"")
+    .replace(/\./g,":")
+    .trim();
+}
+
+function absenceDataByTime(selected,day){
+  const map=new Map();
+  ABSENCE_TEMPLATE.filter(x=>!x.recess).forEach(x=>map.set(x.id,[]));
+
+  selected.forEach(teacher=>{
+    const cfg=app.absenceConfigs.get(teacher.name) || {mode:"all",selectedTimes:new Set()};
+
+    absenceRowsForTeacher(teacher,day).forEach(r=>{
+      const rowKey=timeKey(r.time);
+
+      if(cfg.mode==="partial" && !cfg.selectedTimes.has(rowKey)) return;
+
+      const first=(String(r.time).match(/\d{1,2}:\d{2}/)||[])[0] || "";
+      const target=ABSENCE_TEMPLATE.find(x =>
+        !x.recess &&
+        x.starts &&
+        x.starts.some(s=>s===first)
+      );
+
+      if(target){
+        map.get(target.id).push({
+          teacher:teacher.name,
+          subject:r.subject,
+          course:r.course,
+          room:r.room
+        });
+      }
+    });
+  });
+
+  return map;
+}
+
+
+const SLOT_ROW_LIMITS={
+  m1:4, m2:6, m3:10,
+  m4:10, m5:10,
+  m6:6, m7:5,
+  a1:4, a2:4, a3:5,
+  a4:8, a5:8, a6:8,
+  a7:8
+};
+
+function validateRowLimits(map){
+  const over=[];
+  for(const slot of ABSENCE_TEMPLATE){
+    if(slot.recess) continue;
+    const limit=SLOT_ROW_LIMITS[slot.id] || 8;
+    const rows=map.get(slot.id)||[];
+    if(rows.length>limit){
+      over.push(`${slot.period || ""} ${slot.time}: ${rows.length} (máx. ${limit})`);
+    }
+  }
+  return over;
+}
+
+const PDF_HEADERS=[
+  "HORA",
+  "PROF. AUSENTE",
+  "ASIGNATURA",
+  "GRUPO",
+  "AULA",
+  "SUSTITUTO",
+  "OBSERVACIONES",
+  "NOMBRE Y FIRMA"
+];
+
+function pdfCols(tableW,left){
+  const widths=[54,94,118,62,58,78,190,tableW-54-94-118-62-58-78-190];
+  const xs=[left];
+  widths.forEach(w=>xs.push(xs[xs.length-1]+w));
+  return {widths,xs};
+}
+
+function wrapFullForPdf(text,width,fontSize){
+  const raw=String(text ?? "").trim();
+  if(!raw) return [];
+
+  const maxChars=Math.max(3,Math.floor(width/(fontSize*0.50)));
+  const sourceLines=raw.split(/\n+/);
+  const out=[];
+
+  for(const source of sourceLines){
+    const words=source.split(/\s+/).filter(Boolean);
+    let line="";
+
+    for(let word of words){
+      while(word.length>maxChars){
+        if(line){
+          out.push(line);
+          line="";
+        }
+        out.push(word.slice(0,maxChars));
+        word=word.slice(maxChars);
+      }
+
+      if(!word) continue;
+      const test=line ? line+" "+word : word;
+      if(test.length<=maxChars){
+        line=test;
+      }else{
+        if(line) out.push(line);
+        line=word;
+      }
+    }
+    if(line) out.push(line);
+  }
+
+  return out;
+}
+
+function fitTextInCell(cmds,text,x,y,w,h,options={}){
+  const bold=!!options.bold;
+  const align=options.align || "left";
+  let size=options.maxSize || 6.2;
+  const minSize=options.minSize || 2.8;
+  const padX=options.padX ?? 3;
+  const padY=options.padY ?? 2;
+
+  let lines=[];
+  let lineH=size*1.16;
+
+  while(size>=minSize){
+    lines=wrapFullForPdf(text,w-padX*2,size);
+    lineH=size*1.16;
+    if(lines.length*lineH <= h-padY*2) break;
+    size-=0.2;
+  }
+
+  // Último ajuste: comprime ligeramente el interlineado si fuese necesario.
+  if(lines.length*lineH > h-padY*2 && lines.length){
+    lineH=Math.max(size*0.92,(h-padY*2)/lines.length);
+  }
+
+  const total=lines.length*lineH;
+  let ty=y-(h-total)/2-size;
+
+  for(const line of lines){
+    let tx=x+padX;
+    let textAlign="left";
+    if(align==="center"){
+      tx=x+w/2;
+      textAlign="center";
+    }else if(align==="right"){
+      tx=x+w-padX;
+      textAlign="right";
+    }
+    pdfText(cmds,line,tx,ty,size,bold,textAlign);
+    ty-=lineH;
+  }
+}
+
+function drawShiftTitle(cmds,title,W,H,left,right){
+  const h=28;
+  const y=H-10;
+  pdfRect(cmds,left,y-h,W-left-right,h,1.1);
+  pdfText(cmds,title,left+10,y-18,12,true,"left");
+  pdfText(cmds,"DÍA: __________________________",W-right-220,y-18,10,true,"left");
+  return h;
+}
+
+function drawRecessRow(cmds,label,y,h,left,tableW){
+  pdfFillRect(cmds,left,y-h,tableW,h,0.90,0.92,0.94);
+  cmds.push("0 G 0 g");
+  pdfRect(cmds,left,y-h,tableW,h,1.35);
+  pdfText(cmds,label,left+tableW/2,y-h/2-3,11,true,"center");
+}
+
+function drawPeriodBlockCustom(cmds,slot,entries,rowCount,y,blockH,left,tableW,widths,xs){
+  const headerH=18;
+  const bodyH=blockH-headerH;
+  const rowH=bodyH/rowCount;
+
+  // Borde exterior grueso.
+  pdfRect(cmds,left,y-blockH,tableW,blockH,1.5);
+
+  // Cabecera.
+  pdfFillRect(cmds,left,y-headerH,tableW,headerH,0.82,0.86,0.89);
+  cmds.push("0 G 0 g");
+
+  for(let i=1;i<8;i++){
+    pdfLine(cmds,xs[i],y,xs[i],y-blockH,0.38);
+  }
+  pdfLine(cmds,left,y-headerH,left+tableW,y-headerH,0.55);
+
+  PDF_HEADERS.forEach((h,i)=>{
+    fitTextInCell(cmds,h,xs[i],y-headerH,widths[i],headerH,{
+      bold:true,align:"center",maxSize:6.8,minSize:5.0,padX:2,padY:2
+    });
+  });
+
+  // Hora unida verticalmente.
+  const timeParts=String(slot.time||"").split("-").map(x=>x.trim());
+  const cy=y-headerH-bodyH/2;
+  pdfText(cmds,slot.period||"",left+widths[0]/2,cy+13,10,true,"center");
+  if(timeParts[0]) pdfText(cmds,timeParts[0],left+widths[0]/2,cy,7.5,false,"center");
+  if(timeParts[1]) pdfText(cmds,timeParts[1],left+widths[0]/2,cy-11,7.5,false,"center");
+
+  // Líneas internas: NO atraviesan "NOMBRE Y FIRMA".
+  for(let r=1;r<rowCount;r++){
+    pdfLine(cmds,xs[1],y-headerH-r*rowH,xs[7],y-headerH-r*rowH,0.25);
+  }
+
+  // La columna NOMBRE Y FIRMA queda como un único hueco dentro de la franja.
+  // (solo cabecera + gran cuerpo sin subdividir)
+
+  const shown=(entries||[]).slice(0,rowCount);
+
+  shown.forEach((entry,r)=>{
+    const vals=[
+      entry.teacher,
+      entry.subject,
+      entry.course,
+      entry.room,
+      "",
+      ""
+    ];
+
+    const rowTop=y-headerH-r*rowH;
+    const rowBottom=rowTop-rowH;
+
+    for(let c=0;c<6;c++){
+      const x0=xs[c+1];
+      const w=widths[c+1];
+
+      fitTextInCell(cmds,vals[c],x0,rowBottom,w,rowH,{
+        bold:c===0,
+        align:"left",
+        maxSize:6.1,
+        minSize:2.8,
+        padX:3,
+        padY:1.5
+      });
+    }
+  });
+}
+
+function drawIncidentsPage(title="INCIDENCIAS"){
+  const W=841.89,H=595.28;
+  const cmds=["0 G","0 g"];
+  const left=16,right=16,top=16,bottom=16;
+
+  pdfText(cmds,title,W/2,H-35,15,true,"center");
+  pdfRect(cmds,left,bottom,W-left-right,H-top-bottom-45,1.25);
+
+  return cmds.join("\n");
+}
+
+function drawWorkRegisterPage(){
+  const W=841.89,H=595.28;
+  const cmds=["0 G","0 g"];
+  const left=24,right=24,top=20,bottom=20;
+  const tableW=W-left-right;
+
+  pdfText(cmds,"REGISTRO AULA TRABAJO",W/2,H-32,15,true,"center");
+
+  const titleY=H-55;
+  const headerH=24;
+  const bodyTop=titleY-headerH;
+  const bodyH=bodyTop-bottom;
+  const rowH=bodyH/15;
+
+  const widths=[80,210,190,tableW-80-210-190];
+  const xs=[left];
+  widths.forEach(w=>xs.push(xs[xs.length-1]+w));
+
+  // Tabla completa.
+  pdfRect(cmds,left,bottom,tableW,titleY-bottom,1.2);
+
+  // Cabecera.
+  pdfFillRect(cmds,left,titleY-headerH,tableW,headerH,0.88,0.90,0.93);
+  cmds.push("0 G 0 g");
+
+  for(let i=1;i<4;i++){
+    pdfLine(cmds,xs[i],titleY,xs[i],bottom,0.4);
+  }
+  pdfLine(cmds,left,titleY-headerH,left+tableW,titleY-headerH,0.55);
+
+  const headers=["HORA","ALUMNA/O","PROFESOR QUE ENVÍA","OBSERVACIONES"];
+  headers.forEach((h,i)=>{
+    fitTextInCell(cmds,h,xs[i],titleY-headerH,widths[i],headerH,{
+      bold:true,align:"center",maxSize:8,minSize:6
+    });
+  });
+
+  for(let r=1;r<15;r++){
+    pdfLine(cmds,left,bodyTop-r*rowH,left+tableW,bodyTop-r*rowH,0.28);
+  }
+
+  return cmds.join("\n");
+}
+
+function drawStructuredPage(spec,dataMap){
+  const W=841.89,H=595.28;
+  const cmds=["0 G","0 g"];
+  const left=8,right=8,top=10,bottom=8;
+  const tableW=W-left-right;
+  const {widths,xs}=pdfCols(tableW,left);
+
+  let y=H-top;
+
+  if(spec.title){
+    const th=drawShiftTitle(cmds,spec.title,W,H,left,right);
+    y-=th+4;
+  }
+
+  const recessCount=spec.sequence.filter(x=>x.type==="recess").length;
+  const recessH=24;
+  const periodItems=spec.sequence.filter(x=>x.type==="period");
+
+  const totalRows=periodItems.reduce((s,x)=>s+x.rows,0);
+  const totalHeaders=periodItems.length*18;
+  const remaining=y-bottom-recessCount*recessH-totalHeaders;
+
+  // Altura por hueco, igual dentro de la página.
+  const perRow=Math.max(9,remaining/Math.max(1,totalRows));
+
+  for(const item of spec.sequence){
+    if(item.type==="recess"){
+      drawRecessRow(cmds,item.label,y,recessH,left,tableW);
+      y-=recessH;
+      continue;
+    }
+
+    const slot=ABSENCE_TEMPLATE.find(x=>x.id===item.id);
+    if(!slot) continue;
+
+    const blockH=18+item.rows*perRow;
+    drawPeriodBlockCustom(
+      cmds,
+      slot,
+      dataMap.get(slot.id)||[],
+      item.rows,
+      y,
+      blockH,
+      left,
+      tableW,
+      widths,
+      xs
+    );
+    y-=blockH;
+  }
+
+  return cmds.join("\n");
+}
+
+const PDF_PAGE_SPECS=[
+  // MAÑANA
+  {
+    title:"GUARDIA DE MATÍ",
+    sequence:[
+      {type:"period",id:"m1",rows:4},
+      {type:"period",id:"m2",rows:6},
+      {type:"period",id:"m3",rows:10}
+    ]
+  },
+  {
+    sequence:[
+      {type:"recess",label:"1º PATIO"},
+      {type:"period",id:"m4",rows:10},
+      {type:"period",id:"m5",rows:10}
+    ]
+  },
+  {
+    sequence:[
+      {type:"recess",label:"2º PATIO"},
+      {type:"period",id:"m6",rows:6},
+      {type:"period",id:"m7",rows:5}
+    ]
+  },
+
+  // TARDE
+  {
+    title:"GUARDIA DE VESPRADA",
+    sequence:[
+      {type:"period",id:"a1",rows:4},
+      {type:"period",id:"a2",rows:4},
+      {type:"period",id:"a3",rows:5},
+      {type:"recess",label:"RECREO"}
+    ]
+  },
+  {
+    sequence:[
+      {type:"period",id:"a4",rows:8},
+      {type:"period",id:"a5",rows:8},
+      {type:"period",id:"a6",rows:8}
+    ]
+  },
+  {
+    sequence:[
+      {type:"period",id:"a7",rows:8}
+    ]
+  }
+];
+
+function generateAbsencePDF(){
+  const day=$("absenceDay").value;
+  const selected=app.teachers.filter(t=>app.absentTeachers.has(t.name));
+  if(!selected.length) return;
+
+  const dataMap=absenceDataByTime(selected,day);
+  const totalSelected=[...dataMap.values()].reduce((sum,rows)=>sum+rows.length,0);
+
+  if(totalSelected===0){
+    alert("No has marcado ninguna hora de ausencia para el día seleccionado.");
+    return;
+  }
+
+  const over=validateRowLimits(dataMap);
+  if(over.length){
+    alert(
+      "Hay más profesores ausentes que huecos disponibles en estas franjas:\\n\\n"+
+      over.join("\\n")+
+      "\\n\\nReduce la selección o ajusta las horas antes de generar el PDF."
+    );
+    return;
+  }
+
+  const pages=[];
+
+  // 1-3: mañana
+  pages.push(drawStructuredPage(PDF_PAGE_SPECS[0],dataMap));
+  pages.push(drawStructuredPage(PDF_PAGE_SPECS[1],dataMap));
+  pages.push(drawStructuredPage(PDF_PAGE_SPECS[2],dataMap));
+
+  // 4: incidencias mañana
+  pages.push(drawIncidentsPage("INCIDENCIAS"));
+
+  // 5: registro aula trabajo
+  pages.push(drawWorkRegisterPage());
+
+  // 6-7: tarde primeras seis horas
+  pages.push(drawStructuredPage(PDF_PAGE_SPECS[3],dataMap));
+  pages.push(drawStructuredPage(PDF_PAGE_SPECS[4],dataMap));
+
+  // 8: séptima hora + incidencias
+  {
+    const W=841.89,H=595.28;
+    const cmds=["0 G","0 g"];
+    const left=8,right=8,top=10,bottom=8;
+    const tableW=W-left-right;
+    const {widths,xs}=pdfCols(tableW,left);
+
+    let y=H-top;
+    const slot=ABSENCE_TEMPLATE.find(x=>x.id==="a7");
+    const seventhH=210;
+
+    drawPeriodBlockCustom(
+      cmds,
+      slot,
+      dataMap.get("a7")||[],
+      8,
+      y,
+      seventhH,
+      left,
+      tableW,
+      widths,
+      xs
+    );
+
+    y-=seventhH+12;
+
+    const incidentH=y-bottom;
+    pdfText(cmds,"INCIDENCIAS",left+tableW/2,y-18,13,true,"center");
+    pdfRect(cmds,left,bottom,tableW,incidentH,1.2);
+
+    pages.push(cmds.join("\n"));
+  }
+
+  const blob=buildPdfBlob(pages,841.89,595.28);
+  savePdfBlob(blob,`Guardias_${safeFileName(day)}_manana_tarde.pdf`);
+}
+
+</script>
+</body>
+</html>

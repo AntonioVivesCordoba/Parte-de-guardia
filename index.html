@@ -372,7 +372,7 @@ footer{
       <button id="clearAbsenceBtn" class="secondary">Quitar selección</button>
     </div>
     <div class="small" style="margin-top:10px">
-      El PDF se adapta automáticamente a las ausencias de cada franja: añade huecos libres, reorganiza las páginas y divide los nombres y textos largos en varias líneas para mantener toda la información dentro de su celda.
+      El PDF detecta automáticamente las horas y recreos del Excel cargado, por lo que puede adaptarse a horarios de otros centros. También ajusta huecos, páginas y textos largos sin perder información.
     </div>
   </section>
 
@@ -1196,31 +1196,6 @@ function absenceRowsForTeacher(teacher,day){
     .filter(x=>x.raw || x.subject || x.course || x.room);
 }
 
-const ABSENCE_TEMPLATE = [
-  // MAÑANA
-  {id:"m1", shift:"morning", period:"1ª", time:"7:55 - 8:50", starts:["7:55"]},
-  {id:"m2", shift:"morning", period:"2ª", time:"8:50 - 9:45", starts:["8:50"]},
-  {id:"m3", shift:"morning", period:"3ª", time:"9:45 - 10:40", starts:["9:45"]},
-  {id:"mp1", shift:"morning", recess:"1º PATIO"},
-  {id:"m4", shift:"morning", period:"4ª", time:"11:05 - 12:00", starts:["11:05"]},
-  {id:"m5", shift:"morning", period:"5ª", time:"12:00 - 12:55", starts:["12:00"]},
-  {id:"mp2", shift:"morning", recess:"2º PATIO"},
-  {id:"m6", shift:"morning", period:"6ª", time:"13:10 - 14:05", starts:["13:10"]},
-  {id:"m7", shift:"morning", period:"7ª", time:"14:05 - 15:00", starts:["14:05"]},
-
-  // TARDE
-  {id:"a1", shift:"afternoon", period:"1ª", time:"15:15 - 16:10", starts:["15:15"]},
-  {id:"a2", shift:"afternoon", period:"2ª", time:"16:10 - 17:05", starts:["16:10"]},
-  {id:"a3", shift:"afternoon", period:"3ª", time:"17:05 - 18:00", starts:["17:05"]},
-  {id:"ap1", shift:"afternoon", recess:"1º PATIO"},
-  {id:"a4", shift:"afternoon", period:"4ª", time:"18:20 - 19:15", starts:["18:20"]},
-  {id:"a5", shift:"afternoon", period:"5ª", time:"19:15 - 20:10", starts:["19:15"]},
-  {id:"a6", shift:"afternoon", period:"6ª", time:"20:10 - 21:00", starts:["20:10"]},
-  {id:"ap2", shift:"afternoon", recess:"2º PATIO"},
-  // Aceptamos tanto el horario actual 21:05 como la plantilla 21:10.
-  {id:"a7", shift:"afternoon", period:"7ª", time:"21:10 - 22:05", starts:["21:05","21:10"]}
-];
-
 function timeKey(label){
   return String(label||"")
     .replace(/[–—]/g,"-")
@@ -1229,39 +1204,172 @@ function timeKey(label){
     .trim();
 }
 
-function absenceDataByTime(selected,day){
+function clockMinutes(value){
+  const m=String(value||"").replace(/\./g,":").match(/(\d{1,2}):(\d{2})/);
+  if(!m) return null;
+  return Number(m[1])*60+Number(m[2]);
+}
+
+function timeRangeInfo(label){
+  const matches=String(label||"")
+    .replace(/\./g,":")
+    .match(/\d{1,2}:\d{2}/g) || [];
+
+  return {
+    start:matches[0]||"",
+    end:matches[1]||"",
+    startMin:matches[0] ? clockMinutes(matches[0]) : null,
+    endMin:matches[1] ? clockMinutes(matches[1]) : null
+  };
+}
+
+function isRecessText(value){
+  return /\b(recreo|patio|descanso|esplai)\b/i.test(String(value||""));
+}
+
+function buildDynamicSchedule(){
+  const byKey=new Map();
+
+  app.teachers.forEach(teacher=>{
+    (teacher.periods||[]).forEach(period=>{
+      const key=timeKey(period.time);
+      if(!key) return;
+
+      if(!byKey.has(key)){
+        const info=timeRangeInfo(period.time);
+        byKey.set(key,{
+          id:key,
+          key,
+          time:String(period.time||"").trim(),
+          start:info.start,
+          end:info.end,
+          startMin:info.startMin,
+          endMin:info.endMin,
+          samples:[],
+          isRecess:false,
+          period:""
+        });
+      }
+
+      const item=byKey.get(key);
+
+      Object.values(period.cells||{}).forEach(cell=>{
+        const txt=[
+          cell?.raw||"",
+          cell?.subject||"",
+          cell?.course||"",
+          cell?.room||""
+        ].filter(Boolean).join(" ");
+        if(txt) item.samples.push(txt);
+      });
+    });
+  });
+
+  const slots=[...byKey.values()]
+    .filter(x=>x.startMin!==null)
+    .sort((a,b)=>
+      a.startMin-b.startMin ||
+      (a.endMin??9999)-(b.endMin??9999) ||
+      a.time.localeCompare(b.time,"es")
+    );
+
+  // Se considera recreo si la propia fila contiene esa información.
+  // Esto funciona también con Excel procedente de conversores PDF→Excel.
+  slots.forEach(slot=>{
+    slot.isRecess=slot.samples.some(isRecessText);
+  });
+
+  const teaching=slots.filter(x=>!x.isRecess);
+
+  // Separación automática mañana/tarde:
+  // si hay clases antes y después de las 14:30, la primera franja lectiva
+  // que comienza a partir de las 14:30 inicia el turno de tarde.
+  const hasMorning=teaching.some(x=>x.startMin<14*60+30);
+  const firstAfternoon=hasMorning
+    ? teaching.find(x=>x.startMin>=14*60+30)
+    : null;
+
+  const splitMin=firstAfternoon ? firstAfternoon.startMin : null;
+
+  let morningRaw=[];
+  let afternoonRaw=[];
+
+  if(splitMin!==null){
+    morningRaw=slots.filter(x=>x.startMin<splitMin);
+    afternoonRaw=slots.filter(x=>x.startMin>=splitMin);
+  }else{
+    // Si solo existe un turno, lo tratamos como un único parte.
+    morningRaw=slots;
+    afternoonRaw=[];
+  }
+
+  function makeSequence(rawSlots){
+    let periodNo=0;
+    let recessNo=0;
+
+    return rawSlots.map(slot=>{
+      if(slot.isRecess){
+        recessNo++;
+        return {
+          type:"recess",
+          label:recessNo===1 ? "PATIO / RECREO" : `${recessNo}º PATIO / RECREO`,
+          slot
+        };
+      }
+
+      periodNo++;
+      slot.period=`${periodNo}ª`;
+      return {type:"period",slot};
+    });
+  }
+
+  const morning=makeSequence(morningRaw);
+  const afternoon=makeSequence(afternoonRaw);
+
+  return {
+    morning,
+    afternoon,
+    allSlots:slots,
+    periodSlots:slots.filter(x=>!x.isRecess)
+  };
+}
+
+function absenceDataByTime(selected,day,schedule){
   const map=new Map();
-  ABSENCE_TEMPLATE.filter(x=>!x.recess).forEach(x=>map.set(x.id,[]));
+  const slotByKey=new Map();
+
+  schedule.periodSlots.forEach(slot=>{
+    map.set(slot.id,[]);
+    slotByKey.set(slot.key,slot);
+  });
 
   selected.forEach(teacher=>{
-    const cfg=app.absenceConfigs.get(teacher.name) || {mode:"all",selectedTimes:new Set()};
+    const cfg=app.absenceConfigs.get(teacher.name) || {
+      mode:"all",
+      selectedTimes:new Set()
+    };
 
     absenceRowsForTeacher(teacher,day).forEach(r=>{
       const rowKey=timeKey(r.time);
 
       if(cfg.mode==="partial" && !cfg.selectedTimes.has(rowKey)) return;
 
-      const first=(String(r.time).match(/\d{1,2}:\d{2}/)||[])[0] || "";
-      const target=ABSENCE_TEMPLATE.find(x =>
-        !x.recess &&
-        x.starts &&
-        x.starts.some(s=>s===first)
-      );
+      const target=slotByKey.get(rowKey);
 
-      if(target){
-        map.get(target.id).push({
-          teacher:teacher.name,
-          subject:r.subject,
-          course:r.course,
-          room:r.room
-        });
-      }
+      // Recreos/patios no son ausencias lectivas y no se añaden como profesor.
+      if(!target || target.isRecess) return;
+
+      map.get(target.id).push({
+        teacher:teacher.name,
+        subject:r.subject,
+        course:r.course,
+        room:r.room
+      });
     });
   });
 
   return map;
 }
-
 
 
 const PDF_HEADERS=[
@@ -1612,9 +1720,9 @@ function buildGuardPages(title,sequence,dataMap){
       // Intentamos mantener el patio junto a la siguiente franja.
       let nextNeed=0;
       const next=sequence.slice(i+1).find(x=>x.type==="period");
-      if(next){
-        const nextSlot=ABSENCE_TEMPLATE.find(x=>x.id===next.id);
-        const nextEntries=dataMap.get(next.id)||[];
+      if(next && next.slot){
+        const nextSlot=next.slot;
+        const nextEntries=dataMap.get(nextSlot.id)||[];
         nextNeed=minimumBlockHeightFor(nextSlot,nextEntries,widths);
       }
 
@@ -1630,10 +1738,10 @@ function buildGuardPages(title,sequence,dataMap){
       continue;
     }
 
-    const slot=ABSENCE_TEMPLATE.find(x=>x.id===item.id);
+    const slot=item.slot;
     if(!slot) continue;
 
-    const entries=[...(dataMap.get(item.id)||[])];
+    const entries=[...(dataMap.get(slot.id)||[])];
 
     // Regla normal: ausencias + 3 huecos, mínimo 4.
     let rows3=makeAdaptiveRows(entries,3,4,widths);
@@ -1779,58 +1887,81 @@ function drawWorkRegisterPage(){
   return cmds.join("\n");
 }
 
-const MORNING_SEQUENCE=[
-  {type:"period",id:"m1"},
-  {type:"period",id:"m2"},
-  {type:"period",id:"m3"},
-  {type:"recess",label:"1º PATIO"},
-  {type:"period",id:"m4"},
-  {type:"period",id:"m5"},
-  {type:"recess",label:"2º PATIO"},
-  {type:"period",id:"m6"},
-  {type:"period",id:"m7"}
-];
-
-const AFTERNOON_SEQUENCE=[
-  {type:"period",id:"a1"},
-  {type:"period",id:"a2"},
-  {type:"period",id:"a3"},
-  {type:"recess",label:"1º PATIO"},
-  {type:"period",id:"a4"},
-  {type:"period",id:"a5"},
-  {type:"period",id:"a6"},
-  {type:"recess",label:"2º PATIO"},
-  {type:"period",id:"a7"}
-];
-
 function generateAbsencePDF(){
   const day=$("absenceDay").value;
   const selected=app.teachers.filter(t=>app.absentTeachers.has(t.name));
   if(!selected.length) return;
 
-  const dataMap=absenceDataByTime(selected,day);
-  const totalSelected=[...dataMap.values()].reduce((sum,rows)=>sum+rows.length,0);
+  const schedule=buildDynamicSchedule();
+
+  if(!schedule.periodSlots.length){
+    alert(
+      "No se han podido detectar franjas horarias válidas en el Excel. " +
+      "Comprueba que la primera columna contenga horas del tipo 8:55 - 9:50."
+    );
+    return;
+  }
+
+  const dataMap=absenceDataByTime(selected,day,schedule);
+  const totalSelected=[...dataMap.values()].reduce(
+    (sum,rows)=>sum+rows.length,0
+  );
 
   if(totalSelected===0){
-    alert("No has marcado ninguna hora de ausencia para el día seleccionado.");
+    alert(
+      "No hay horas lectivas seleccionadas para este día. " +
+      "El programa ha detectado las franjas del Excel automáticamente; " +
+      "revisa únicamente que las casillas marcadas correspondan a clases o actividades que quieras incluir."
+    );
     return;
   }
 
   const pages=[];
 
-  // El número de páginas de guardia se calcula automáticamente.
-  pages.push(...buildGuardPages("GUARDIA DE MATÍ",MORNING_SEQUENCE,dataMap));
+  if(schedule.afternoon.length){
+    if(schedule.morning.length){
+      pages.push(
+        ...buildGuardPages(
+          "GUARDIA DE MATÍ",
+          schedule.morning,
+          dataMap
+        )
+      );
 
-  // Páginas auxiliares independientes.
-  pages.push(drawIncidentsPage("INCIDENCIAS · MAÑANA"));
-  pages.push(drawWorkRegisterPage());
+      pages.push(drawIncidentsPage("INCIDENCIAS · MAÑANA"));
+      pages.push(drawWorkRegisterPage());
+    }
 
-  pages.push(...buildGuardPages("GUARDIA DE VESPRADA",AFTERNOON_SEQUENCE,dataMap));
-  pages.push(drawIncidentsPage("INCIDENCIAS · TARDE"));
+    pages.push(
+      ...buildGuardPages(
+        schedule.morning.length ? "GUARDIA DE VESPRADA" : "PARTE DE GUARDIAS",
+        schedule.afternoon,
+        dataMap
+      )
+    );
+
+    pages.push(
+      drawIncidentsPage(
+        schedule.morning.length ? "INCIDENCIAS · TARDE" : "INCIDENCIAS"
+      )
+    );
+  }else{
+    // Centro con un único turno: no imponemos ninguna estructura de horas.
+    pages.push(
+      ...buildGuardPages(
+        "PARTE DE GUARDIAS",
+        schedule.morning,
+        dataMap
+      )
+    );
+    pages.push(drawIncidentsPage("INCIDENCIAS"));
+    pages.push(drawWorkRegisterPage());
+  }
 
   const blob=buildPdfBlob(pages,841.89,595.28);
-  savePdfBlob(blob,`Guardias_${safeFileName(day)}_manana_tarde.pdf`);
+  savePdfBlob(blob,`Parte_guardias_${safeFileName(day)}.pdf`);
 }
+
 
 </script>
 </body>
